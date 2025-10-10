@@ -74,10 +74,19 @@
       <artifactId>awaitility</artifactId>
       <scope>test</scope>
     </dependency>
+    <!--
     <dependency>
       <groupId>io.github.microcks.quarkus</groupId>
       <artifactId>quarkus-microcks-test</artifactId>
       <version>${quarkus-microcks.version}</version>
+      <scope>test</scope>
+    </dependency>
+    -->
+
+    <dependency>
+      <groupId>org.junit.vintage</groupId>
+      <artifactId>junit-vintage-engine</artifactId>
+      <version>5.13.4</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

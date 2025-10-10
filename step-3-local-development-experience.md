@@ -142,7 +142,8 @@ Listening for transport dt_socket at address: 5005
 2025-10-10 13:24:52,859 INFO  [io.qua.kaf.cli.dep.DevServicesKafkaProcessor] (build-49) Dev Services for Kafka started. Other Quarkus applications in dev mode will find the broker automatically. For Quarkus applications in production mode, you can connect to this by starting your application with -Dkafka.bootstrap.servers=PLAINTEXT://redpanda-xq7r6:29092,OUTSIDE://localhost:56542
 
 2025-10-10 13:26:04,858 INFO  [io.git.mic.qua.dep.DevServicesMicrocksProcessor] (build-40) The 'default' microcks container is ready on http://localhost:63445
-2025-10-10 13:26:04,862 INFO  [tc.qua.io/microcks/microcks-uber-async-minion:latest] (build-22) Creating container for image: quay.io/microcks/microcks-uber-async-minion:latest2025-10-10 13:26:04,920 INFO  [tc.qua.io/microcks/microcks-uber-async-minion:latest] (build-22) Container quay.io/microcks/microcks-uber-async-minion:latest is starting: 1dda5cc4368d41673e172e65ee7877320fc0fbf08ec758ee5bf0fa4fc07650b8
+2025-10-10 13:26:04,862 INFO  [tc.qua.io/microcks/microcks-uber-async-minion:latest] (build-22) Creating container for image: quay.io/microcks/microcks-uber-async-minion:latest
+2025-10-10 13:26:04,920 INFO  [tc.qua.io/microcks/microcks-uber-async-minion:latest] (build-22) Container quay.io/microcks/microcks-uber-async-minion:latest is starting: 1dda5cc4368d41673e172e65ee7877320fc0fbf08ec758ee5bf0fa4fc07650b8
 2025-10-10 13:26:07,372 INFO  [tc.qua.io/microcks/microcks-uber-async-minion:latest] (build-22) Container quay.io/microcks/microcks-uber-async-minion:latest started in PT2.509787S
 __  ____  __  _____   ___  __ ____  ______ 
  --/ __ \/ / / / _ | / _ \/ //_/ / / / __/ 
