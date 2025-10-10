@@ -3,6 +3,25 @@
 Now that we address the REST/Synchronous part, let's have a look on the part related to Asynchronous Kafka events.
 Testing of asynchronous or event-driven system is usually a pain for developers 🥲
 
+## Prelude - Adding the Microcks Test Dependency
+
+First we need an additional helper. The `quarkus-microcks-test` dependency must be added to your project dependencies like illustrated below:
+
+[`pom.xml`](pom.xml):
+```xml
+<dependency>
+  <groupId>io.github.microcks.quarkus</groupId>
+  <artifactId>quarkus-microcks-test</artifactId>
+  <version>${quarkus-microcks.version}</version>
+  <scope>test</scope>
+</dependency>
+```
+
+The dependency scope can be set to `test` as this dependency will only be used during unit tests. You don't need to package them into
+your application.
+
+It will allow us to have access to the _Internal Kafka Endpoint_ started by the Kafka Dev Services.
+
 ## First Test - Verify our OrderService is publishing events
 
 In this section, we'll focus on testing the `Order Service` + `Event Publisher` components of our application:
@@ -17,13 +36,14 @@ Let's review the [`OrderServiceTests`](src/test/java/org/acme/order/service/Orde
 
 ```java
 @QuarkusTest
+@QuarkusTestResource(MicrocksTestCompanion.class)
 public class OrderServiceTests extends BaseTest {
 
    @Inject
    OrderService service;
 
-  @InjectKafkaInternalEndpoint
-  String kafkaInternalEndpoint;
+   @InjectKafkaInternalEndpoint
+   String kafkaInternalEndpoint;
 
    @Test
    void testEventIsPublishedWhenOrderIsCreated() {
@@ -44,8 +64,6 @@ public class OrderServiceTests extends BaseTest {
 
       try {
          // Launch the Microcks test and wait a bit to be sure it actually connects to Kafka.
-         // Because of Redpanda, it must be >3 sec to ensure the consumer get a refresh of metadata and actually receive messages.
-        // Update: with Redpanda > 24, this is no longer needed as metadata are refreshed on consumer creation.
          CompletableFuture<TestResult> testRequestFuture = MicrocksContainer.testEndpointAsync(microcksContainerUrl, kafkaTest);
 
          TimeUnit.MILLISECONDS.sleep(500L);
@@ -83,7 +101,7 @@ Things are a bit more complex here, but we'll walk through step-by-step:
 * Finally, we wait for the future completion to retrieve the `TestResult` and assert on the success and check we received 1 message as a result.
 
 > [!NOTE]  
-> Kafka Dev Services is using Red Panda and this one seems to cause additional delay when having a consumer updated on new partitions and leaders. This forces us to increase the delay after test startup to 3.5 sec. Some other Kafka implementation don't have this behaviour.
+> Depending on the Kafka Dev Services implementation, we may face additional delay when having a consumer updated on new partitions and leaders. This may force us to increase the delay after test startup.
 
 The sequence diagram below details the test sequence. You'll see 2 parallel blocks being executed:
 * One that corresponds to Microcks test - where it connects and listen for Kafka messages,
@@ -111,6 +129,49 @@ sequenceDiagram
 ```
 
 Because the test is a success, it means that Microcks has received an `OrderEvent` on the specified topic and has validated the message conformance with the AsyncAPI contract or this event-driven architecture. So you're sure that all your Quarkus configuration, Kafka JSON serializer configuration and network communication are actually correct!
+
+### 🎁 Bonus step - Verify the event content
+
+So you're now sure that an event has been sent to Kafka and that it's valid regarding the AsyncAPI contract. But what about the content
+of this event? If you want to go further and check the content of the event, you can do it by asking Microcks the events read during the
+test execution and actually check their content. This can be done adding a few lines of code:
+
+```java
+@Test
+void testEventIsPublishedWhenOrderIsCreated() {
+  // [...] Unchanged comparing previous step.
+
+  try {
+     // [...] Unchanged comparing previous step.
+
+     // Get the Microcks test result.
+     TestResult testResult = testRequestFuture.get();
+     
+     // [...] Unchanged comparing previous step.
+
+     // Check the content of the emitted event, read from Kafka topic.
+     List<UnidirectionalEvent> events = MicrocksContainer
+             .getEventMessagesForTestCase(microcksContainerUrl, testResult, "SUBSCRIBE orders-created");
+
+     assertEquals(1, events.size());
+
+     EventMessage message = events.get(0).getEventMessage();
+     Map<String, Object> messageMap = new ObjectMapper().readValue(message.getContent(), new TypeReference<>() {});
+
+     // Properties from the event message should match the order.
+     assertEquals("Creation", messageMap.get("changeReason"));
+     Map<String, Object> orderMap = (Map<String, Object>) messageMap.get("order");
+     assertEquals("123-456-789", orderMap.get("customerId"));
+     assertEquals(8.4, orderMap.get("totalPrice"));
+     assertEquals(2, ((List<?>) orderMap.get("productQuantities")).size());
+  } catch (Exception e) {
+     fail("No exception should be thrown when testing Kafka publication", e);
+  }
+}
+```
+
+Here, we're using the `getEventMessagesForTestCase()` method on the Microcks container to retrieve the messages read during the test execution.
+Using the wrapped `EventMessage` class, we can then check the content of the message and assert that it matches the order we've created.
 
 ## Second Test - Verify our OrderEventListener is processing events
 

@@ -71,6 +71,68 @@ sequenceDiagram
     PastryAPIClient-->>-PastryAPIClientTests: List<Pastry>
 ```
 
+### 🎁 Bonus step - Check the mock endpoints are actually used
+
+While the above test is a good start, it doesn't actually check that the mock endpoints are being used. In a more complex application, it's possible
+that the client is not correctly configured or use some cache or other mechanism that would bypass the mock endpoints. In order to check that you
+can actually use the `verify()` method available on the Microcks container:
+
+```java
+@ConfigProperty(name= "quarkus.microcks.default.http")
+protected String microcksContainerUrl;
+
+@Test
+public void testGetPastries() {
+   // Test our API client and check that arguments and responses are correctly serialized.
+   List<Pastry> pastries = client.listPastries("S");
+   assertEquals(1, pastries.size());
+
+   pastries = client.listPastries("M");
+   assertEquals(2, pastries.size());
+
+   pastries = client.listPastries("L");
+   assertEquals(2, pastries.size());
+
+   // Check that the mock API has really been invoked.
+  boolean mockInvoked = MicrocksContainer.verify(microcksContainerUrl, "API Pastries", "0.0.1");
+   assertTrue(mockInvoked, "Mock API not invoked");
+}
+```
+
+`verify()` takes the target API name and version as arguments and returns a boolean indicating if the mock has been invoked. This is a good way to
+ensure that the mock endpoints are actually being used in your test.
+
+If you need finer-grained control, you can also check the number of invocations with `getServiceInvocationsCount()`. This way you can check that
+the mock has been invoked the correct number of times:
+
+```java
+@Test
+void testGetPastry() {
+   // Get the number of invocations before our test.
+   long beforeMockInvocations = MicrocksContainer.getServiceInvocationsCount(microcksContainerUrl, "API Pastries", "0.0.1");
+
+   // Test our API client and check that arguments and responses are correctly serialized.
+   Pastry pastry = client.getPastry("Millefeuille");
+   assertEquals("Millefeuille", pastry.name());
+   assertEquals("available", pastry.status());
+
+   pastry = client.getPastry("Eclair Cafe");
+   assertEquals("Eclair Cafe", pastry.name());
+   assertEquals("available", pastry.status());
+
+   pastry = client.getPastry("Eclair Chocolat");
+   assertEquals("Eclair Chocolat", pastry.name());
+   assertEquals("unknown", pastry.status());
+
+   // Check our mock API has been invoked the correct number of times.
+   long afterMockInvocations = MicrocksContainer.getServiceInvocationsCount(microcksContainerUrl, "API Pastries", "0.0.1");
+   assertEquals(3, afterMockInvocations - beforeMockInvocations, "Mock API not invoked the correct number of times");
+}
+```
+
+This is a super powerful way to ensure that your application logic (caching, no caching, etc.) is correctly implemented and use the
+mock endpoints when required 🎉
+
 ## Second Test - Verify the technical conformance of Order Service API
 
 The 2nd thing we want to validate is the conformance of the `Order API` we'll expose to consumers. In this section and the next one,
@@ -95,6 +157,24 @@ This certainly works, but presents 2 problems:
 
 Microcks Dev Services provide another approach by letting you reuse the OpenAPI specification directly in your test suite, without having to write assertions and validation of messages for API interaction.
 
+But to do that, we'll need to first have a base test class that will allow us to access some environment properties like the dynamic port of our Quarkus application or the URL of the Microcks container.
+Let's review the [`BaseTest`](src/test/java/org/acme/order/BaseTest.java) class:
+
+```java
+@QuarkusTest
+public class BaseTest {
+
+   @ConfigProperty(name= "quarkus.http.test-port")
+   protected int quarkusHttpPort;
+
+   @ConfigProperty(name= "kafka.bootstrap.servers")
+   protected String kafkaBootstrapServers;
+
+   @ConfigProperty(name= "quarkus.microcks.default.http")
+   protected String microcksContainerUrl;
+}
+```
+
 Let's review the [`OrderResourceContractTests`](src/test/java/org/acme/order/api/OrderResourceContractTests.java) test class:
 
 ```java
@@ -111,18 +191,17 @@ public class OrderResourceContractTests extends BaseTest {
             .build();
 
       TestResult testResult = MicrocksContainer.testEndpoint(microcksContainerUrl, testRequest);
-
-      // You may inspect complete response object with following:
-      //System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(testResult));
-
+      
       assertTrue(testResult.isSuccess());
+      Assertions.assertSuccess(testResult);
+
+      // We expect 1 test case to be executed (1 for each operation defined in the Open API contract).
       assertEquals(1, testResult.getTestCaseResults().size());
+      // We expect 2 test steps to be executed (1 for each sample defined in the Open API contract).
+      assertEquals(2, testResult.getTestCaseResults().get(0).getTestStepResults().size());
    }
 }
 ```
-
-> [!NOTE]
-> For commodity purposes, we've made this test extend [`BaseTest`](src/test/java/org/acme/order/BaseTest.java), giving us access to frequently used environment properties like the `quarkusHttpPort`. 
 
 In this test, we're using a Microcks-provided `TestRequest` object that allows us to specify to Microcks the scope of the conformance test we want to run:
 * We ask for testing our endpoint against the service interface of `Order Service API` in version `0.1.0`.
@@ -181,6 +260,7 @@ You can now validate this from your Java Unit Test as well! Let's review the [`O
 ```java
 @QuarkusTest
 public class OrderResourcePostmanContractTests extends BaseTest {
+   
    @Test
    void testPostmanCollectionContract() throws Exception {
       // Ask for a Postman Collection conformance to be launched.
@@ -192,10 +272,7 @@ public class OrderResourcePostmanContractTests extends BaseTest {
 
       TestResult testResult = MicrocksContainer.testEndpoint(microcksContainerUrl, testRequest);
 
-      // You may inspect complete response object with following:
-      //System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(testResult));
-
-      assertTrue(testResult.isSuccess());
+      Assertions.assertSuccess(testResult);
       assertEquals(1, testResult.getTestCaseResults().size());
    }
 }
