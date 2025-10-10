@@ -1,3 +1,10 @@
+target
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE files
+.vscode/
+.idea/
+
 # Compiled class file
 *.class
 
